@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>metrics collector example</title>
+  </head>
+  <body>
+    <h1>Metrics collector example</h1>
+    <button type="button" id="ok">fetch /api/ok</button>
+    <button type="button" id="slow">fetch /api/slow</button>
+    <button type="button" id="missing">fetch /api/missing (404)</button>
+    <button type="button" id="xhr">XHR /api/ok</button>
+    <button type="button" id="throw">throw error</button>
+    <button type="button" id="reject">unhandled rejection</button>
+    <button type="button" id="remote">load broken remote microfrontend</button>
+    <script type="module">
+      const on = (id, fn) => document.getElementById(id).addEventListener('click', fn);
+      on('ok', () => fetch('/api/ok?user=42'));
+      on('slow', () => fetch('/api/slow'));
+      on('missing', () => fetch('/api/missing', { method: 'POST' }));
+      on('xhr', () => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/ok');
+        xhr.send();
+      });
+      on('throw', () => {
+        throw new Error('Button exploded');
+      });
+      on('reject', () => Promise.reject(new Error('Nobody caught me')));
+      on('remote', () => {
+        const script = document.createElement('script');
+        script.src = 'http://localhost:9/remoteEntry.js';
+        document.head.append(script);
+      });
+    </script>
+  </body>
+</html>

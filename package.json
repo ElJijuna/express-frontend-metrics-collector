@@ -1,0 +1,66 @@
+{
+    "name": "express-frontend-metrics-collector",
+    "version": "0.1.0",
+    "description": "Browser telemetry collector (fetch/XHR requests, errors, browser info) for microfrontend SPAs, injected and served by an Express middleware",
+    "type": "module",
+    "license": "MIT",
+    "main": "./dist/server/index.js",
+    "types": "./dist/server/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/server/index.d.ts",
+            "import": "./dist/server/index.js"
+        },
+        "./client": {
+            "types": "./dist/client/index.d.ts",
+            "import": "./dist/client/index.js"
+        },
+        "./browser/collector.js": "./dist/browser/collector.js",
+        "./browser/collector.classic.js": "./dist/browser/collector.classic.js",
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "sideEffects": [
+        "./dist/client/index.js",
+        "./dist/client/classic.js",
+        "./dist/browser/*"
+    ],
+    "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+    },
+    "scripts": {
+        "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+        "build": "npm run clean && tsc -p tsconfig.build.json && node scripts/build-browser.mjs",
+        "typecheck": "tsc",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "example": "npm run build && node example/server.mjs",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "biome check --write .",
+        "format:check": "biome check .",
+        "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build"
+    },
+    "peerDependencies": {
+        "express": "^4.21.0 || ^5.0.0"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.5.14",
+        "@types/express": "^5.0.6",
+        "@types/node": "^24.19.0",
+        "@typescript/native": "npm:typescript@^7.0.2",
+        "esbuild": "^0.28.2",
+        "eslint": "^10.11.0",
+        "express": "^5.2.1",
+        "globals": "^17.12.0",
+        "happy-dom": "^20.14.5",
+        "super-configs": "^1.25.1",
+        "typescript": "npm:@typescript/typescript6@^6.0.2",
+        "vitest": "^5.0.2"
+    }
+}
