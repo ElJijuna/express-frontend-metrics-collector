@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MetricsBatch } from '../shared/types.js';
 import { Collector } from './collector.js';
 import { type CollectorConfig, resolveConfig } from './config.js';
+import { Presence } from './presence.js';
 import type { Transport } from './transport.js';
 
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -35,10 +36,16 @@ describe('Collector', () => {
     const config = resolveConfig(undefined, {
       endpoint: 'https://metrics.test/ingest',
       app: 'shell',
+      captureNavigation: false,
       ...overrides,
     });
 
-    collector = new Collector(config, window, transportMock.transport).start();
+    collector = new Collector(
+      config,
+      window,
+      transportMock.transport,
+      new Presence(window, null),
+    ).start();
 
     return transportMock;
   };
@@ -82,7 +89,7 @@ describe('Collector', () => {
       expect(end).toBeGreaterThanOrEqual(startTime);
     }
 
-    expect(batch).toMatchObject({ v: 1, app: 'shell', seq: 1 });
+    expect(batch).toMatchObject({ v: 2, app: 'shell', seq: 1 });
     expect(batch?.browser.userAgent).toEqual(expect.any(String));
   });
 
@@ -195,6 +202,82 @@ describe('Collector', () => {
     expect(sent).toHaveLength(0);
     expect(beacons.map((b) => b.requests.length)).toEqual([2, 2, 1]);
     expect(beacons.map((b) => b.seq)).toEqual([1, 2, 3]);
+  });
+
+  it('identifies the client, tab and page load in every batch', async () => {
+    const { sent } = start({ batchSize: 1 });
+
+    await window.fetch('/api');
+    await flushMicrotasks();
+
+    const { identity } = (collector as Collector).presence;
+
+    expect(sent[0]).toMatchObject({
+      clientId: identity.clientId,
+      tabId: identity.tabId,
+      loadId: identity.loadId,
+    });
+    expect(typeof sent[0]?.visible).toBe('boolean');
+  });
+
+  it('records the initial URL and SPA route changes, skipping repeats', () => {
+    history.replaceState(null, '', '/');
+    const { beacons } = start({ captureNavigation: true });
+
+    history.pushState(null, '', '/login?token=secret');
+    history.replaceState(null, '', '/login?token=secret');
+    history.pushState(null, '', '/home');
+    collector?.flushOnUnload();
+
+    expect(beacons[0]?.navigations.map(([url]) => url)).toEqual([
+      `${location.origin}/`,
+      `${location.origin}/login`,
+      `${location.origin}/home`,
+    ]);
+  });
+
+  it('sends an empty heartbeat on each tick, but not on a plain flush', async () => {
+    const { sent } = start();
+
+    await collector?.flush();
+    expect(sent).toHaveLength(0);
+
+    await collector?.tick();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ requests: [], errors: [], navigations: [] });
+  });
+
+  it('skips the heartbeat when disabled', async () => {
+    const { sent } = start({ heartbeat: false });
+
+    await collector?.tick();
+    expect(sent).toHaveLength(0);
+  });
+
+  it('marks only the last unload chunk as final, even when nothing is pending', async () => {
+    const { beacons } = start({ batchSize: 1 });
+
+    vi.spyOn(collector as Collector, 'flush').mockResolvedValue();
+    await window.fetch('/a');
+    await window.fetch('/b');
+    collector?.flushOnUnload(true);
+
+    expect(beacons.map((b) => b.final)).toEqual([undefined, true]);
+
+    collector?.flushOnUnload(true);
+    expect(beacons[2]).toMatchObject({ requests: [], final: true });
+  });
+
+  it('does not close the page load when it enters the back/forward cache', () => {
+    const { beacons } = start();
+    const pageHide = (persisted: boolean) =>
+      Object.assign(new Event('pagehide'), { persisted }) as PageTransitionEvent;
+
+    window.dispatchEvent(pageHide(true));
+    expect(beacons).toHaveLength(0);
+
+    window.dispatchEvent(pageHide(false));
+    expect(beacons[0]?.final).toBe(true);
   });
 
   it('restores the original fetch on stop', () => {

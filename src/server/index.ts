@@ -6,7 +6,13 @@ import type { MetricsBatch } from '../shared/types.js';
 import { createHtmlInjector, INJECT_MARKER } from './inject.js';
 import { isMetricsBatch } from './validate.js';
 
-export type { BrowserInfo, ErrorRecord, MetricsBatch, RequestRecord } from '../shared/types.js';
+export type {
+  BrowserInfo,
+  ErrorRecord,
+  MetricsBatch,
+  NavigationRecord,
+  RequestRecord,
+} from '../shared/types.js';
 export { injectTag } from './inject.js';
 export { isMetricsBatch } from './validate.js';
 
@@ -26,6 +32,10 @@ export interface ClientOptions {
   xhr?: boolean;
   errors?: boolean;
   console?: boolean;
+  /** Empty batch every `flushInterval` so the backend knows the client is alive. */
+  heartbeat?: boolean;
+  /** Record SPA route changes. */
+  navigation?: boolean;
   stripQuery?: boolean;
   /** Substrings; requests whose URL contains any of them are not recorded. */
   ignore?: string[];
@@ -68,7 +78,8 @@ export const logBatchSummary: BatchHandler = (batch) => {
   const failed = batch.requests.filter(([, , status]) => status === 0 || status >= 400).length;
 
   console.info(
-    `[metrics] ${batch.app}#${batch.seq} ${batch.sessionId.slice(0, 8)} ` +
+    `[metrics] ${batch.app} client=${batch.clientId.slice(0, 8)} tab=${batch.tabId.slice(0, 8)} ` +
+      `#${batch.seq}${batch.final ? ' final' : ''}${batch.tabs ? ` tabs=${batch.tabs.length}` : ''} ` +
       `requests=${batch.requests.length} (failed=${failed}) errors=${batch.errors.length} ` +
       `dropped=${batch.dropped.requests + batch.dropped.errors}`,
   );

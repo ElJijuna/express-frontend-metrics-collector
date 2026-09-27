@@ -21,11 +21,14 @@ writeFileSync(
 );
 
 const batch: MetricsBatch = {
-  v: 1,
+  v: 2,
   app: 'shell',
-  sessionId: 'abc',
+  clientId: 'client-1',
+  tabId: 'tab-1',
+  loadId: 'load-1',
   seq: 1,
   page: 'http://localhost/',
+  visible: true,
   sentAt: 0,
   browser: {
     userAgent: 'ua',
@@ -37,6 +40,7 @@ const batch: MetricsBatch = {
   },
   requests: [['GET', 'http://localhost/api', 200, 1, 2]],
   errors: [],
+  navigations: [['http://localhost/', 0]],
   dropped: { requests: 0, errors: 0 },
 };
 

@@ -18,6 +18,13 @@ export interface CollectorConfig {
   captureXhr: boolean;
   captureErrors: boolean;
   captureConsoleErrors: boolean;
+  /**
+   * Send a batch every `flushInterval` even when empty, so the backend knows the client is
+   * alive. With Web Locks only the leader tab heartbeats, carrying the list of open tabs.
+   */
+  heartbeat: boolean;
+  /** Record SPA route changes (`pushState`, `replaceState`, `popstate`, `hashchange`). */
+  captureNavigation: boolean;
   /** Remove query string and hash from recorded URLs (privacy + lower cardinality). */
   stripQuery: boolean;
   /** Requests whose URL matches are not recorded. Strings match as substrings. */
@@ -36,6 +43,8 @@ export const DEFAULT_CONFIG: CollectorConfig = {
   captureXhr: true,
   captureErrors: true,
   captureConsoleErrors: false,
+  heartbeat: true,
+  captureNavigation: true,
   stripQuery: true,
   ignoreUrls: [],
   debug: false,
@@ -92,6 +101,8 @@ export const parseQueryConfig = (scriptUrl: string): Partial<CollectorConfig> =>
     captureXhr: toBoolean(params.get('xhr')),
     captureErrors: toBoolean(params.get('errors')),
     captureConsoleErrors: toBoolean(params.get('console')),
+    heartbeat: toBoolean(params.get('heartbeat')),
+    captureNavigation: toBoolean(params.get('navigation')),
     stripQuery: toBoolean(params.get('stripQuery')),
     ignoreUrls: ignore ? ignore.split(',').filter(Boolean) : undefined,
     debug: toBoolean(params.get('debug')),

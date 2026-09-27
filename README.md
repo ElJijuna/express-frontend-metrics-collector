@@ -79,6 +79,8 @@ puede incluirlo sin build:
 | `sampleRate` | `1` | Fracción de page loads a recolectar. |
 | `fetch`, `xhr`, `errors` | `1` | Qué instrumentar. |
 | `console` | `0` | Capturar también `console.error`. |
+| `heartbeat` | `1` | Enviar un batch vacío cada `flushInterval` para indicar que el cliente sigue vivo. |
+| `navigation` | `1` | Registrar cambios de ruta de la SPA (`pushState`, `replaceState`, `popstate`, `hashchange`). |
 | `stripQuery` | `1` | Quita query/hash de las URLs (privacidad + menor cardinalidad). |
 | `ignore` | — | Substrings separados por coma, p. ej. `hot-update,/health`. |
 | `auto` | `1` | `0` = no iniciar solo (usar `init()` manualmente). |
@@ -98,12 +100,15 @@ collector?.recordError({ kind: 'error', message: 'Pago rechazado' }); // errores
 
 ```jsonc
 {
-  "v": 1,
+  "v": 2,
   "app": "shell",
   "env": "qa",
-  "sessionId": "dad7cc53-…",   // por page load
-  "seq": 3,                    // correlativo; huecos = batches perdidos
+  "clientId": "4b53a17f-…",    // navegador/perfil (localStorage), compartido por sus pestañas
+  "tabId": "1e56078b-…",       // pestaña (sessionStorage), sobrevive recargas
+  "loadId": "77d17a2f-…",      // page load
+  "seq": 3,                    // correlativo por page load; huecos = batches perdidos
   "page": "https://app/checkout",
+  "visible": true,             // la pestaña estaba visible al armar el batch
   "sentAt": 1790429497892,
   "browser": { "userAgent": "…", "brands": ["Chromium 140"], "platform": "macOS", "mobile": false,
                "language": "es-PE", "timezone": "America/Lima", "screen": "1920x1080",
@@ -112,12 +117,44 @@ collector?.recordError({ kind: 'error', message: 'Pago rechazado' }); // errores
   "errors": [{ "kind": "resource", "message": "Failed to load <script>",
                "source": "https://mfe-cart/remoteEntry.js", "page": "…",
                "count": 1, "firstSeen": 1790429497880, "lastSeen": 1790429497880 }],
+  "navigations": [["https://app/", 1790429490000], ["https://app/checkout", 1790429495000]],
+  "tabs": ["1e56078b-…", "02df78b1-…"],  // solo la pestaña líder: pestañas abiertas del cliente
+  "final": true,               // solo en el último batch del page load (cierre, recarga, salida)
   "dropped": { "requests": 0, "errors": 0 }
 }
 ```
 
+La primera entrada de `navigations` es la URL inicial del page load; las siguientes son cambios de
+ruta de la SPA. Para saber en qué ruta ocurrió un request, se busca la última navegación anterior a
+su `start`.
+
 `status` es `0` cuando el request falló a nivel de red o fue abortado. `end` es cuando llegan los
 headers (cuando resuelve la promesa de `fetch`), no cuando termina de descargarse el body.
+
+## Clientes, pestañas y presencia
+
+Cada batch identifica tres niveles: **cliente** (`clientId`), **pestaña** (`tabId`) y **page load**
+(`loadId`). Como todo el sitio se sirve desde un único origin, las pestañas de un mismo navegador
+comparten `localStorage` y la [Web Locks API](https://developer.mozilla.org/docs/Web/API/Web_Locks_API):
+
+- Cada pestaña mantiene el lock `metrics-collector:tab:<tabId>`, que el navegador libera al cerrarla o si
+  se cae. Si al iniciar ese lock ya está tomado, la pestaña es un "Duplicar pestaña" (que copia
+  `sessionStorage`) y genera un `tabId` nuevo.
+- Una sola pestaña por cliente toma el lock de **líder**. Solo ella envía el heartbeat, con `tabs`: la
+  lista exacta de pestañas abiertas. Si se cierra, otra toma el liderazgo sola. El resto de las pestañas
+  envía únicamente cuando tiene datos.
+- Sin Web Locks (Safari < 15.4), cada pestaña envía su propio heartbeat y no se incluye `tabs`.
+
+Para el backend:
+
+- **Cliente conectado:** llegó un batch con su `clientId` hace menos de un TTL.
+- **Pestañas abiertas:** el último `tabs` de su líder.
+- **Pestaña cerrada o recargada:** llegó un batch con `final: true`. Si la pestaña entra al
+  back/forward cache no se envía `final`, porque puede volver.
+
+Chrome limita los timers de las pestañas en segundo plano (hasta 1 vez por minuto después de
+~5 minutos). Si la líder está oculta, su heartbeat puede espaciarse hasta ~60 s, así que conviene
+un TTL de al menos ~90 s.
 
 ## Decisiones y mejoras
 

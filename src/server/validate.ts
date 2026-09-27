@@ -10,6 +10,11 @@ const isRequestRecord = (value: unknown): boolean =>
   typeof value[2] === 'number' &&
   typeof value[3] === 'number' &&
   typeof value[4] === 'number';
+const isNavigationRecord = (value: unknown): boolean =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  typeof value[0] === 'string' &&
+  typeof value[1] === 'number';
 const isErrorRecord = (value: unknown): boolean =>
   isObject(value) &&
   typeof value.kind === 'string' &&
@@ -21,11 +26,17 @@ export const isMetricsBatch = (value: unknown): value is MetricsBatch =>
   isObject(value) &&
   value.v === PROTOCOL_VERSION &&
   typeof value.app === 'string' &&
-  typeof value.sessionId === 'string' &&
+  typeof value.clientId === 'string' &&
+  typeof value.tabId === 'string' &&
+  typeof value.loadId === 'string' &&
   typeof value.seq === 'number' &&
+  (value.tabs === undefined ||
+    (Array.isArray(value.tabs) && value.tabs.every((tab) => typeof tab === 'string'))) &&
   isObject(value.browser) &&
   isObject(value.dropped) &&
   Array.isArray(value.requests) &&
   value.requests.every(isRequestRecord) &&
   Array.isArray(value.errors) &&
-  value.errors.every(isErrorRecord);
+  value.errors.every(isErrorRecord) &&
+  Array.isArray(value.navigations) &&
+  value.navigations.every(isNavigationRecord);

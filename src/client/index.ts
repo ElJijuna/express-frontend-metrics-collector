@@ -4,7 +4,13 @@
  */
 import { autoInit } from './bootstrap.js';
 
-export type { BrowserInfo, ErrorRecord, MetricsBatch, RequestRecord } from '../shared/types.js';
+export type {
+  BrowserInfo,
+  ErrorRecord,
+  MetricsBatch,
+  NavigationRecord,
+  RequestRecord,
+} from '../shared/types.js';
 export { init } from './bootstrap.js';
 export { Collector } from './collector.js';
 export { type CollectorConfig, DEFAULT_CONFIG, resolveConfig } from './config.js';

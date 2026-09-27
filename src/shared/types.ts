@@ -2,7 +2,7 @@
  * Wire format shared by the browser collector and the Express ingest endpoint.
  * Bump {@link PROTOCOL_VERSION} on any breaking change.
  */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /**
  * Compact request record: `[METHOD, URL, status, startEpochMs, endEpochMs]`.
@@ -16,6 +16,9 @@ export type RequestRecord = [
   start: number,
   end: number,
 ];
+
+/** SPA route change: `[url, epochMs]`. The first one of a page load is the initial URL. */
+export type NavigationRecord = [url: string, at: number];
 
 export type ErrorKind = 'error' | 'rejection' | 'resource' | 'console';
 
@@ -57,15 +60,29 @@ export interface MetricsBatch {
   v: typeof PROTOCOL_VERSION;
   app: string;
   env?: string;
-  /** Random id per page load, lets the backend stitch batches together. */
-  sessionId: string;
-  /** Monotonic batch counter within the session; gaps mean lost batches. */
+  /** Browser profile (`localStorage`), shared by all its tabs of this origin. */
+  clientId: string;
+  /** Tab (`sessionStorage`); survives reloads and is unique even for duplicated tabs. */
+  tabId: string;
+  /** Page load; `seq` restarts with each one. */
+  loadId: string;
+  /** Monotonic batch counter within the page load; gaps mean lost batches. */
   seq: number;
   page: string;
+  /** `document.visibilityState === 'visible'` when the batch was built. */
+  visible: boolean;
   sentAt: number;
   browser: BrowserInfo;
   requests: RequestRecord[];
   errors: ErrorRecord[];
+  navigations: NavigationRecord[];
+  /**
+   * Open tab ids of this client. Only sent by the leader tab, one per client, so the
+   * backend can treat any tab missing from the list as closed.
+   */
+  tabs?: string[];
+  /** Last batch of this page load (tab closed, reloaded or navigated away). */
+  final?: true;
   /** Records discarded because buffers were full since the previous batch. */
   dropped: { requests: number; errors: number };
 }
